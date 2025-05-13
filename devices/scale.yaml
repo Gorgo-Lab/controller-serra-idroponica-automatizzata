@@ -92,25 +92,25 @@ sensor:
   # Calibrazione: diagnostica
   # TODO: rimuovere una volta testato
   - platform: template
-    id: calib_raw0_sensor
+    id: calib_raw0_diagnostic
     name: "[DEV] valore RAW 0 Kg"
     update_interval: 1s
     lambda: |-
       return id(calib_raw0);
   - platform: template
-    id: calib_raw1_sensor
+    id: calib_raw1_diagnostic
     name: "[DEV] valore RAW peso noto"
     update_interval: 1s
     lambda: |-
       return id(calib_raw1);
   - platform: template
-    id: calib_weight1_sensor
+    id: calib_weight1_diagnostic
     name: "[DEV] peso noto"
     update_interval: 1s
     lambda: |-
       return id(known_calibration_weight).state;
   - platform: template
-    id: scale_hx711_raw_value_sensor
+    id: scale_hx711_raw_value_diagnostic
     name: "[DEV] valore RAW da hx711"
     update_interval: 1s
     lambda: |-

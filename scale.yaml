@@ -1,0 +1,177 @@
+# pipenv run esphome run serra_scale.yaml
+# pipenv run esphome logs serra_scale.yaml
+
+esphome:
+  name: scale
+
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+
+# Enable logging
+# TODO: in produzione level: WARN
+logger:
+  # level: WARN
+
+mqtt:
+  broker: !secret mqtt_broker
+  port: 1883
+
+
+globals:
+
+  # valore raw zero iniziale 
+  - id: calib_raw0
+    type: int32_t
+    restore_value: yes
+    initial_value: '0'
+  # valore raw con peso noto
+  - id: calib_raw1
+    type: int32_t
+    restore_value: true
+    initial_value: '0'
+
+
+# https://esphome.io/components/number/template.html
+number:
+  - platform: template
+    name: "Peso noto (kg)"
+    id: known_calibration_weight
+    optimistic: true
+    restore_value: true
+    min_value: 1.0  # minimo sotto il quale considero non affidabile la calibrazione
+    max_value: 200  # massimo con 4 celle di carico da 50kg
+    step: 0.01
+    unit_of_measurement: "kg"
+    mode: box  # oppure "slider" per una barra
+
+
+button:
+  # Calibrazione: step 1
+  - platform: template
+    name: "Calibra zero iniziale"
+    id: scale_calib_zero_button
+    on_press:
+      then:
+        - lambda: |-
+            id(calib_raw0) = id(scale_hx711_raw_value).state;
+            ESP_LOGI("calibrazione", "Salvato calib_raw0 = %.2f", id(calib_raw0));
+
+
+  # Calibrazione: step 2
+  - platform: template
+    name: "Calibra con peso noto"
+    id: known_calibration_weight_button
+    icon: "mdi:weight"
+    on_press:
+      - lambda: |-
+          id(calib_raw1) = id(scale_hx711_raw_value).state;
+
+          ESP_LOGI(
+            "calibrazione",
+            "Salvato calib_raw1 = %.2f con peso = %.2f",
+            id(calib_raw1), id(known_calibration_weight).state
+          );
+
+
+## Sensor Configuration ##
+sensor:
+  # ---------------------
+  # template sensors from global variables.
+  # (solo se c'è id senza name => internal: True)
+
+  # -------------------------------------------------------
+  # Calibrazione: diagnostica
+  # TODO: rimuovere una volta testato
+  - platform: template
+    id: calib_raw0_sensor
+    name: "[DEV] valore RAW 0 Kg"
+    update_interval: 1s
+    lambda: |-
+      return id(calib_raw0);
+  - platform: template
+    id: calib_raw1_sensor
+    name: "[DEV] valore RAW peso noto"
+    update_interval: 1s
+    lambda: |-
+      return id(calib_raw1);
+  - platform: template
+    id: calib_weight1_sensor
+    name: "[DEV] peso noto"
+    update_interval: 1s
+    lambda: |-
+      return id(known_calibration_weight).state;
+  - platform: template
+    id: scale_hx711_raw_value_sensor
+    name: "[DEV] valore RAW da hx711"
+    update_interval: 1s
+    lambda: |-
+      return id(scale_hx711_raw_value).state;
+
+
+  # -------------------------------------------------------
+  # RAW Scale input
+  # https://esphome.io/components/sensor/hx711
+  - platform: hx711
+    id: scale_hx711_raw_value
+    internal: True  # usato internamente al firmware, non è esposta su Home Assistant
+    dout_pin: 16
+    clk_pin: 17
+    gain: 128
+    update_interval: 1s
+    on_value:
+      # nuovo valore grezzo letto da XH711!
+      then:
+        # aggiorno il valore di scale_value 
+        # (sensore calibrato in kg) con il valore raw
+        # che è un sensore di tipo template il cui valore non viene preso da hardware
+        # ma viene aggiornato programmaticamente dal firmware così:      
+        - sensor.template.publish:
+            id: scale_value
+            state: !lambda 'return id(scale_hx711_raw_value).state;'
+
+  # Sensore principale che fornisce il peso calibrato in Kg.
+  - platform: template
+    id: scale_value
+    name: "Scale Value"
+    internal: False
+    unit_of_measurement: kg
+    accuracy_decimals: 2
+    # the sensor will automatically update through the 'sensor.template.publish' call
+    update_interval: never
+    filters:
+      # Il valore interno a questo sensore è uguale a quello raw
+      # ed è impostato da scale_hx711_raw_value.
+      # Applico la calibrazione come se fosse un filtro
+      # che altera il valore raw e pubblica quello in kg.
+      # y = a * x + b
+      # a = (y2 - y1) / (x2 - x1)
+      # b = y1 − a * x1
+      - lambda: |-
+          float raw0 = id(calib_raw0);
+          float raw1 = id(calib_raw1);
+          float kg1 = id(known_calibration_weight).state;
+
+          // evito divisione per zero
+          if (raw1 == raw0) return 0.0;
+
+          float a = kg1 / (raw1 - raw0);
+          float b = -a * raw0;
+
+          return a * x + b;
+
+      # mappo a zero i valori sotto una certa soglia
+      - lambda: |-
+          if (x <= 0.1) {
+            return 0.0;
+          } else {
+            return x;
+          }

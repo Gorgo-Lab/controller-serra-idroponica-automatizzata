@@ -12,7 +12,7 @@ Apri devices/secrets.yaml e inserisci i parametri della tua connessione wifi
 
 ### 2. Flash del device
 
-Requisiti: pipenv
+Requisiti: [pipenv](https://pipenv.pypa.io/en/latest/)
 
 ```
 > pipenv install

@@ -21,11 +21,11 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
-  # Enable fallback hotspot (captive portal) in case wifi connection fails
-  ap:
-    ssid: "Esp12E Fallback Hotspot"
-    password: "xOxWSEaml1km"
-
+mqtt:
+  broker: !secret mqtt_broker
+  port: 1883
+  
+  
 captive_portal:
 
 sensor:

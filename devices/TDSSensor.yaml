@@ -1,0 +1,114 @@
+esphome:
+  name: esp32devkit1
+  friendly_name: esp32devkit1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "*"
+
+ota:
+  - platform: esphome
+    password: ****
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Esp32Devkit1 Fallback Hotspot"
+    password: "****"
+
+captive_portal:
+
+
+sensor:
+  - platform: adc
+    pin: GPIO32
+    name: "TDS RAW"
+    id: tdsraw
+    update_interval: never
+    accuracy_decimals: 3
+    attenuation: 6db
+    
+  # Temperature Compensated Voltage  
+  - platform: template
+    name: "TDS TCV"
+    id: tank_tds_tcv
+    unit_of_measurement: V
+    accuracy_decimals: 3
+    lambda: return ((id(tdsraw).state) / (1 + (0.02 * ((28.0) - 25.0))));  #qui commentare e scommentare la riga successiva
+    #lambda: return ((id(shrimptank_tds_raw_v).state) / (1 + (0.02 * ((id(tank_temperature).state) - 25.0))));
+    update_interval: never
+    internal: true
+  
+# Temperature Compensated TDS
+  - platform: template
+    name: "TDS"
+    id: tank_tds
+    unit_of_measurement: 'PPM'
+    accuracy_decimals: 0    
+    update_interval: never
+    lambda: return (133.42*(id(tank_tds_tcv).state)*(id(tank_tds_tcv).state)*(id(tank_tds_tcv).state) - 255.86*(id(tank_tds_tcv).state)*(id(tank_tds_tcv).state) + 857.39*(id(tank_tds_tcv).state))*0.5;
+
+# TDS to μS
+  - platform: template
+    name: "EC μS"
+    id: tank_us
+    unit_of_measurement: 'μS'
+    accuracy_decimals: 0    
+    update_interval: never
+    lambda: return (id(tank_tds).state)*2;
+
+output:
+  - platform: gpio
+    pin: GPIO026
+    id: tds_power
+    inverted: true
+  - platform: gpio
+    pin: GPIO025
+    id: tds_gnd
+    
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    on_time:
+      
+      # Every 10 sec:
+      - seconds: /10
+        then:
+          - output.turn_on: tds_power
+          - output.turn_on: tds_gnd
+          - delay: 1s
+          - component.update: tdsraw
+          - delay: 100ms
+          - component.update: tdsraw
+          - delay: 100ms
+          - component.update: tdsraw
+          - delay: 1s
+          - output.turn_off: tds_power
+          - output.turn_off: tds_gnd
+          - component.update: tank_tds_tcv
+          - component.update: tank_tds
+          - component.update: tank_us
+
+switch:
+  - platform: template
+    name: "Switch TDS"
+    # ...
+    turn_on_action:
+      - output.turn_on: tds_power
+      - output.turn_on: tds_gnd
+    turn_off_action:
+      - output.turn_off: tds_power
+      - output.turn_off: tds_gnd

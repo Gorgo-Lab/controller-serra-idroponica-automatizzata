@@ -95,7 +95,21 @@ sensor:
     multiplexer: 'A1_GND'
     gain: 4.096
     name: "A1 EC"
-         
+
+
+  - platform: ultrasonic
+    trigger_pin: 33
+    echo_pin: 32
+    name: "Ultrasonic Sensor"
+    update_interval: 1s
+    pulse_time: 5us
+    timeout: 20m
+    unit_of_measurement: "cm"
+    filters:
+      # I multiplied by 100 in order to get CM since the sensor works in meters
+      - lambda: return x*100; 
+
+
 
 font:
     # gfonts://family[@weight]

@@ -1,0 +1,478 @@
+esphome:
+  name: peristaltic_pumps
+  friendly_name: "4 Peristaltic Pumps Controller"
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Pumps Fallback Hotspot"
+    password: "P3r1st4lt1c"
+
+mqtt:
+  broker: !secret mqtt_broker
+  port: 1883
+
+captive_portal:
+
+# 4 Peristaltic Pumps Controller with Calibration System
+# Each pump can be calibrated to deliver precise volumes in centiliters
+# Elegoo 4-Channel Relay Module Configuration
+# Most relay modules are ACTIVE LOW (relay activates when GPIO is LOW)
+# VCC: 5V or 3.3V, GND: Ground, IN1-IN4: Control pins
+
+# Global variables for pump calibration
+# ml_per_second = volume pumped per second for each pump
+globals:
+  # Calibration: ml per second for each pump (default 1.0 ml/s)
+  - id: pump1_ml_per_sec
+    type: float
+    restore_value: true
+    initial_value: '1.0'
+  - id: pump2_ml_per_sec
+    type: float
+    restore_value: true
+    initial_value: '1.0'
+  - id: pump3_ml_per_sec
+    type: float
+    restore_value: true
+    initial_value: '1.0'
+  - id: pump4_ml_per_sec
+    type: float
+    restore_value: true
+    initial_value: '1.0'
+    
+  # Total volume dispensed tracking
+  - id: pump1_total_ml
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+  - id: pump2_total_ml
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+  - id: pump3_total_ml
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+  - id: pump4_total_ml
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+
+# Calibration inputs
+number:
+  # Calibration values for each pump (ml per second)
+  - platform: template
+    name: "Pump 1 - ml/sec calibration"
+    id: pump1_calib_input
+    optimistic: true
+    restore_value: true
+    min_value: 0.1
+    max_value: 10.0
+    step: 0.1
+    unit_of_measurement: "ml/s"
+    mode: box
+    on_value:
+      then:
+        - lambda: 'id(pump1_ml_per_sec) = x;'
+        
+  - platform: template
+    name: "Pump 2 - ml/sec calibration"
+    id: pump2_calib_input
+    optimistic: true
+    restore_value: true
+    min_value: 0.1
+    max_value: 10.0
+    step: 0.1
+    unit_of_measurement: "ml/s"
+    mode: box
+    on_value:
+      then:
+        - lambda: 'id(pump2_ml_per_sec) = x;'
+        
+  - platform: template
+    name: "Pump 3 - ml/sec calibration"
+    id: pump3_calib_input
+    optimistic: true
+    restore_value: true
+    min_value: 0.1
+    max_value: 10.0
+    step: 0.1
+    unit_of_measurement: "ml/s"
+    mode: box
+    on_value:
+      then:
+        - lambda: 'id(pump3_ml_per_sec) = x;'
+        
+  - platform: template
+    name: "Pump 4 - ml/sec calibration"
+    id: pump4_calib_input
+    optimistic: true
+    restore_value: true
+    min_value: 0.1
+    max_value: 10.0
+    step: 0.1
+    unit_of_measurement: "ml/s"
+    mode: box
+    on_value:
+      then:
+        - lambda: 'id(pump4_ml_per_sec) = x;'
+
+  # Volume to dispense inputs (centiliters)
+  - platform: template
+    name: "Pump 1 - Volume to dispense (cl)"
+    id: pump1_volume_input
+    optimistic: true
+    min_value: 0.1
+    max_value: 100.0
+    step: 0.1
+    initial_value: 1.0
+    unit_of_measurement: "cl"
+    mode: box
+    
+  - platform: template
+    name: "Pump 2 - Volume to dispense (cl)"
+    id: pump2_volume_input
+    optimistic: true
+    min_value: 0.1
+    max_value: 100.0
+    step: 0.1
+    initial_value: 1.0
+    unit_of_measurement: "cl"
+    mode: box
+    
+  - platform: template
+    name: "Pump 3 - Volume to dispense (cl)"
+    id: pump3_volume_input
+    optimistic: true
+    min_value: 0.1
+    max_value: 100.0
+    step: 0.1
+    initial_value: 1.0
+    unit_of_measurement: "cl"
+    mode: box
+    
+  - platform: template
+    name: "Pump 4 - Volume to dispense (cl)"
+    id: pump4_volume_input
+    optimistic: true
+    min_value: 0.1
+    max_value: 100.0
+    step: 0.1
+    initial_value: 1.0
+    unit_of_measurement: "cl"
+    mode: box
+
+switch:
+  # Basic relay controls (internal use)
+  - platform: gpio
+    pin: 
+      number: GPIO2
+      inverted: true  # Active LOW relay module
+    name: "Pump 1 Relay"
+    id: pump1_relay
+    restore_mode: RESTORE_DEFAULT_OFF
+    internal: true
+
+  - platform: gpio
+    pin: 
+      number: GPIO4
+      inverted: true  # Active LOW relay module
+    name: "Pump 2 Relay"
+    id: pump2_relay
+    restore_mode: RESTORE_DEFAULT_OFF
+    internal: true
+
+  - platform: gpio
+    pin: 
+      number: GPIO5
+      inverted: true  # Active LOW relay module
+    name: "Pump 3 Relay"
+    id: pump3_relay
+    restore_mode: RESTORE_DEFAULT_OFF
+    internal: true
+
+  - platform: gpio
+    pin: 
+      number: GPIO18
+      inverted: true  # Active LOW relay module
+    name: "Pump 4 Relay"
+    id: pump4_relay
+    restore_mode: RESTORE_DEFAULT_OFF
+    internal: true
+
+  # Manual pump controls
+  - platform: template
+    name: "Pump 1 Manual"
+    id: pump1_manual
+    icon: "mdi:water-pump"
+    turn_on_action:
+      - switch.turn_on: pump1_relay
+    turn_off_action:
+      - switch.turn_off: pump1_relay
+      
+  - platform: template
+    name: "Pump 2 Manual"
+    id: pump2_manual
+    icon: "mdi:water-pump"
+    turn_on_action:
+      - switch.turn_on: pump2_relay
+    turn_off_action:
+      - switch.turn_off: pump2_relay
+      
+  - platform: template
+    name: "Pump 3 Manual"
+    id: pump3_manual
+    icon: "mdi:water-pump"
+    turn_on_action:
+      - switch.turn_on: pump3_relay
+    turn_off_action:
+      - switch.turn_off: pump3_relay
+      
+  - platform: template
+    name: "Pump 4 Manual"
+    id: pump4_manual
+    icon: "mdi:water-pump"
+    turn_on_action:
+      - switch.turn_on: pump4_relay
+    turn_off_action:
+      - switch.turn_off: pump4_relay
+
+  # Emergency stop
+  - platform: template
+    name: "Emergency Stop All Pumps"
+    id: emergency_stop
+    icon: "mdi:stop-circle"
+    turn_on_action:
+      - switch.turn_off: pump1_relay
+      - switch.turn_off: pump2_relay
+      - switch.turn_off: pump3_relay
+      - switch.turn_off: pump4_relay
+      - delay: 100ms
+      - switch.turn_off: emergency_stop  # Auto-reset
+
+# Status LED per indicare lo stato del dispositivo
+status_led:
+  pin:
+    number: GPIO19
+    inverted: false
+
+# Dispense buttons - precise volume delivery
+button:
+  # Calibration buttons for each pump (30 second test)
+  - platform: template
+    name: "Pump 1 - Calibration Test (30s)"
+    id: pump1_calib_test
+    icon: "mdi:water-pump-test"
+    on_press:
+      - switch.turn_on: pump1_relay
+      - delay: 30s
+      - switch.turn_off: pump1_relay
+
+  - platform: template
+    name: "Pump 2 - Calibration Test (30s)"
+    id: pump2_calib_test
+    icon: "mdi:water-pump-test"
+    on_press:
+      - switch.turn_on: pump2_relay
+      - delay: 30s
+      - switch.turn_off: pump2_relay
+
+  - platform: template
+    name: "Pump 3 - Calibration Test (30s)"
+    id: pump3_calib_test
+    icon: "mdi:water-pump-test"
+    on_press:
+      - switch.turn_on: pump3_relay
+      - delay: 30s
+      - switch.turn_off: pump3_relay
+
+  - platform: template
+    name: "Pump 4 - Calibration Test (30s)"
+    id: pump4_calib_test
+    icon: "mdi:water-pump-test"
+    on_press:
+      - switch.turn_on: pump4_relay
+      - delay: 30s
+      - switch.turn_off: pump4_relay
+
+  # Precise volume dispense buttons
+  - platform: template
+    name: "Pump 1 - Dispense Volume"
+    id: pump1_dispense
+    icon: "mdi:cup-water"
+    on_press:
+      - lambda: |-
+          float volume_cl = id(pump1_volume_input).state;
+          float volume_ml = volume_cl * 10.0;  // Convert cl to ml
+          float ml_per_sec = id(pump1_ml_per_sec);
+          int duration_ms = (int)((volume_ml / ml_per_sec) * 1000);
+          
+          ESP_LOGI("pump1", "Dispensing %.1f cl (%.1f ml) for %d ms", volume_cl, volume_ml, duration_ms);
+          
+          // Update total volume dispensed
+          id(pump1_total_ml) += volume_ml;
+      - switch.turn_on: pump1_relay
+      - lambda: |-
+          float volume_cl = id(pump1_volume_input).state;
+          float volume_ml = volume_cl * 10.0;
+          float ml_per_sec = id(pump1_ml_per_sec);
+          int duration_ms = (int)((volume_ml / ml_per_sec) * 1000);
+          id(pump1_dispense).set_timeout("dispense_timeout", duration_ms, [=]() {
+            id(pump1_relay).turn_off();
+          });
+
+  - platform: template
+    name: "Pump 2 - Dispense Volume"
+    id: pump2_dispense
+    icon: "mdi:cup-water"
+    on_press:
+      - lambda: |-
+          float volume_cl = id(pump2_volume_input).state;
+          float volume_ml = volume_cl * 10.0;
+          float ml_per_sec = id(pump2_ml_per_sec);
+          int duration_ms = (int)((volume_ml / ml_per_sec) * 1000);
+          
+          ESP_LOGI("pump2", "Dispensing %.1f cl (%.1f ml) for %d ms", volume_cl, volume_ml, duration_ms);
+          id(pump2_total_ml) += volume_ml;
+      - switch.turn_on: pump2_relay
+      - lambda: |-
+          float volume_cl = id(pump2_volume_input).state;
+          float volume_ml = volume_cl * 10.0;
+          float ml_per_sec = id(pump2_ml_per_sec);
+          int duration_ms = (int)((volume_ml / ml_per_sec) * 1000);
+          id(pump2_dispense).set_timeout("dispense_timeout", duration_ms, [=]() {
+            id(pump2_relay).turn_off();
+          });
+
+  - platform: template
+    name: "Pump 3 - Dispense Volume"
+    id: pump3_dispense
+    icon: "mdi:cup-water"
+    on_press:
+      - lambda: |-
+          float volume_cl = id(pump3_volume_input).state;
+          float volume_ml = volume_cl * 10.0;
+          float ml_per_sec = id(pump3_ml_per_sec);
+          int duration_ms = (int)((volume_ml / ml_per_sec) * 1000);
+          
+          ESP_LOGI("pump3", "Dispensing %.1f cl (%.1f ml) for %d ms", volume_cl, volume_ml, duration_ms);
+          id(pump3_total_ml) += volume_ml;
+      - switch.turn_on: pump3_relay
+      - lambda: |-
+          float volume_cl = id(pump3_volume_input).state;
+          float volume_ml = volume_cl * 10.0;
+          float ml_per_sec = id(pump3_ml_per_sec);
+          int duration_ms = (int)((volume_ml / ml_per_sec) * 1000);
+          id(pump3_dispense).set_timeout("dispense_timeout", duration_ms, [=]() {
+            id(pump3_relay).turn_off();
+          });
+
+  - platform: template
+    name: "Pump 4 - Dispense Volume"
+    id: pump4_dispense
+    icon: "mdi:cup-water"
+    on_press:
+      - lambda: |-
+          float volume_cl = id(pump4_volume_input).state;
+          float volume_ml = volume_cl * 10.0;
+          float ml_per_sec = id(pump4_ml_per_sec);
+          int duration_ms = (int)((volume_ml / ml_per_sec) * 1000);
+          
+          ESP_LOGI("pump4", "Dispensing %.1f cl (%.1f ml) for %d ms", volume_cl, volume_ml, duration_ms);
+          id(pump4_total_ml) += volume_ml;
+      - switch.turn_on: pump4_relay
+      - lambda: |-
+          float volume_cl = id(pump4_volume_input).state;
+          float volume_ml = volume_cl * 10.0;
+          float ml_per_sec = id(pump4_ml_per_sec);
+          int duration_ms = (int)((volume_ml / ml_per_sec) * 1000);
+          id(pump4_dispense).set_timeout("dispense_timeout", duration_ms, [=]() {
+            id(pump4_relay).turn_off();
+          });
+
+  # Reset total volume counters
+  - platform: template
+    name: "Reset All Volume Counters"
+    id: reset_counters
+    icon: "mdi:counter"
+    on_press:
+      - lambda: |-
+          id(pump1_total_ml) = 0.0;
+          id(pump2_total_ml) = 0.0;
+          id(pump3_total_ml) = 0.0;
+          id(pump4_total_ml) = 0.0;
+          ESP_LOGI("reset", "All volume counters reset to zero");
+
+# Binary sensors
+binary_sensor:
+  - platform: template
+    name: "Any Pump Active"
+    id: any_pump_active
+    lambda: |-
+      return (id(pump1_relay).state || 
+              id(pump2_relay).state || 
+              id(pump3_relay).state || 
+              id(pump4_relay).state);
+    icon: "mdi:water-pump"
+
+# Diagnostic sensors
+sensor:
+  - platform: uptime
+    name: "Pump Controller Uptime"
+    
+  # Total volume dispensed sensors
+  - platform: template
+    name: "Pump 1 - Total Volume Dispensed"
+    id: pump1_total_sensor
+    update_interval: 10s
+    unit_of_measurement: "ml"
+    accuracy_decimals: 1
+    lambda: 'return id(pump1_total_ml);'
+    
+  - platform: template
+    name: "Pump 2 - Total Volume Dispensed"
+    id: pump2_total_sensor
+    update_interval: 10s
+    unit_of_measurement: "ml"
+    accuracy_decimals: 1
+    lambda: 'return id(pump2_total_ml);'
+    
+  - platform: template
+    name: "Pump 3 - Total Volume Dispensed"
+    id: pump3_total_sensor
+    update_interval: 10s
+    unit_of_measurement: "ml"
+    accuracy_decimals: 1
+    lambda: 'return id(pump3_total_ml);'
+    
+  - platform: template
+    name: "Pump 4 - Total Volume Dispensed"
+    id: pump4_total_sensor
+    update_interval: 10s
+    unit_of_measurement: "ml"
+    accuracy_decimals: 1
+    lambda: 'return id(pump4_total_ml);'
+
+text_sensor:
+  - platform: template
+    name: "Pump Status"
+    update_interval: 5s
+    lambda: |-
+      std::string status = "";
+      if (id(pump1_relay).state) status += "P1 ";
+      if (id(pump2_relay).state) status += "P2 ";
+      if (id(pump3_relay).state) status += "P3 ";
+      if (id(pump4_relay).state) status += "P4 ";
+      if (status.empty()) status = "All OFF";
+      return status;

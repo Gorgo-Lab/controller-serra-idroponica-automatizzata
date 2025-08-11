@@ -1,0 +1,64 @@
+# pompe
+# OHM 4.6
+# 12V 
+# 12 / 4.6 = 2,6A
+# 
+# sotto i 5 V sembra faccia fatica (cigola)
+# forse è 6/12V
+
+# decidiamo che funziona bene con 6V e circa 0.5A
+# anche se si scalda di brutto il motore
+
+# le due sono leggermente diverse
+# 
+
+
+esphome:
+  name: peristaltic_pumps
+  friendly_name: "4 Peristaltic Pumps Controller"
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Pumps Fallback Hotspot"
+    password: "P3r1st4lt1c"
+
+mqtt:
+  broker: !secret mqtt_broker
+  port: 1883
+
+
+
+captive_portal:
+
+switch:
+  # Basic relay controls (internal use)
+  - platform: gpio
+    pin: 
+      number: GPIO2
+      inverted: true  # Active LOW relay module
+      mode: OUTPUT_OPEN_DRAIN
+    name: "Pump 1 Relay"
+    id: pump1_relay
+    restore_mode: RESTORE_DEFAULT_OFF
+    internal: true
+
+  # Manual pump controls
+  - platform: template
+    name: "Pump 1 Manual"
+    id: pump1_manual
+    icon: "mdi:water-pump"
+    turn_on_action:
+      - switch.turn_on: pump1_relay
+    turn_off_action:
+      - switch.turn_off: pump1_relay

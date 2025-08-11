@@ -17,12 +17,15 @@ esphome:
   name: peristaltic_pumps
   friendly_name: "4 Peristaltic Pumps Controller"
 
+
 esp32:
   board: esp32dev
   framework:
     type: arduino
 
+
 logger:
+
 
 wifi:
   ssid: !secret wifi_ssid
@@ -31,18 +34,54 @@ wifi:
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "Pumps Fallback Hotspot"
-    password: "P3r1st4lt1c"
+    password: "gorgolab"
+
 
 mqtt:
   broker: !secret mqtt_broker
   port: 1883
 
 
-
 captive_portal:
 
+
+
+globals:
+  # Memorizza il tempo del primo punto di calibrazione (in secondi)
+  - id: pump1_time1
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+  
+  # Memorizza il tempo del secondo punto di calibrazione (in secondi)  
+  - id: pump1_time2
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+    
+  # Memorizza la portata calcolata (ml/secondo)
+  - id: pump1_flow_rate
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+    
+  # Timestamp di quando inizia la calibrazione
+  # variabile di appoggio
+  - id: pump1_calibration_start
+    type: float
+    restore_value: false  # Non serve persistere questo
+    initial_value: '0.0'
+
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
+
 switch:
+  # ---------------------------------------------------------------------------
   # Basic relay controls (internal use)
+
+  # pompa 1
   - platform: gpio
     pin: 
       number: GPIO2
@@ -53,7 +92,43 @@ switch:
     restore_mode: RESTORE_DEFAULT_OFF
     internal: true
 
+  # pompa 2
+  - platform: gpio
+    pin: 
+      number: GPIO4
+      inverted: true  # Active LOW relay module
+      mode: OUTPUT_OPEN_DRAIN
+    name: "Pump 2 Relay"
+    id: pump2_relay
+    restore_mode: RESTORE_DEFAULT_OFF
+    internal: true
+
+  # pompa 3
+  - platform: gpio
+    pin: 
+      number: GPIO5
+      inverted: true  # Active LOW relay module
+      mode: OUTPUT_OPEN_DRAIN
+    name: "Pump 3 Relay"
+    id: pump3_relay
+    restore_mode: RESTORE_DEFAULT_OFF
+    internal: true
+
+  # pompa 4
+  - platform: gpio
+    pin: 
+      number: GPIO18
+      inverted: true  # Active LOW relay module
+      mode: OUTPUT_OPEN_DRAIN
+    name: "Pump 4 Relay"
+    id: pump4_relay
+    restore_mode: RESTORE_DEFAULT_OFF
+    internal: true
+
+  # ---------------------------------------------------------------------------
   # Manual pump controls
+
+  # pompa 1
   - platform: template
     name: "Pump 1 Manual"
     id: pump1_manual
@@ -62,3 +137,183 @@ switch:
       - switch.turn_on: pump1_relay
     turn_off_action:
       - switch.turn_off: pump1_relay
+
+  # pompa 2
+  - platform: template
+    name: "Pump 2 Manual"
+    id: pump2_manual
+    icon: "mdi:water-pump"
+    turn_on_action:
+      - switch.turn_on: pump2_relay
+    turn_off_action:
+      - switch.turn_off: pump2_relay
+
+  # pompa 3
+  - platform: template
+    name: "Pump 3 Manual"
+    id: pump3_manual
+    icon: "mdi:water-pump"
+    turn_on_action:
+      - switch.turn_on: pump3_relay
+    turn_off_action:
+      - switch.turn_off: pump3_relay
+
+  # pompa 4
+  - platform: template
+    name: "Pump 4 Manual"
+    id: pump4_manual
+    icon: "mdi:water-pump"
+    turn_on_action:
+      - switch.turn_on: pump4_relay
+    turn_off_action:
+      - switch.turn_off: pump4_relay
+
+
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
+
+button:
+
+  # Emergency stop
+  - platform: template
+    name: "Emergency Stop All Pumps"
+    id: emergency_stop
+    icon: "mdi:stop-circle"
+    on_press:
+      - logger.log: "Emergency stop activated!"
+      - switch.turn_off: pump1_relay
+      - switch.turn_off: pump2_relay  
+      - switch.turn_off: pump3_relay
+      - switch.turn_off: pump4_relay
+
+  # ---------------------------------------------------------------------------
+  # Bottoni per la calibrazione
+
+  - platform: template
+    name: "Start Pump 1 Calibration"
+    id: pump1_start_cal
+    icon: "mdi:play-circle"
+    on_press:
+      # logica di avvio calibrazione
+      #  - avvio pompa
+      #  - salvo il timestamp iniziale
+      #  - aggiorno lo stato (testo)
+      #  - loggo
+      - switch.turn_on: pump1_relay
+      - globals.set:
+          id: pump1_calibration_start
+          value: !lambda 'return millis() / 1000.0;'  # conversione ms in secondi
+      - text_sensor.template.publish:
+          id: pump1_cal_status
+          state: "Versare fino a 100ml e premere First Point"
+      - logger.log: "Pump 1 calibration started"
+
+      
+  - platform: template  
+    name: "Pump 1 First Point (100ml)"
+    id: pump1_first_point
+    icon: "mdi:numeric-1-circle"
+    on_press:
+      # logica primo punto calibrazione
+      #  - setto i secondi trascorsi
+      #  - aggiorno lo stato (testo)
+      #  - loggo
+      - globals.set:
+          id: pump1_time1
+          value: !lambda 'return (millis() / 1000.0) - id(pump1_calibration_start);'
+      - text_sensor.template.publish:
+          id: pump1_cal_status
+          state: "Continuare fino a 200ml e premere Second Point"
+      - logger.log: 
+          format: "First point: %.2f seconds"
+          args: ['id(pump1_time1)']
+      
+  - platform: template
+    name: "Pump 1 Second Point (200ml)" 
+    id: pump1_second_point
+    icon: "mdi:numeric-2-circle"
+    on_press:
+      # logica secondo punto e fine calibrazione
+      #  - setto i secondi trascorsi
+      #  - setto la portata
+      #  - spengo la pompa
+      #  - aggiorno lo stato (testo)
+      #  - loggo la portata
+      - globals.set:
+          id: pump1_time2
+          value: !lambda 'return (millis() / 1000.0) - id(pump1_calibration_start);'
+      - globals.set:
+          id: pump1_flow_rate
+          value: !lambda |-
+            float time_diff = id(pump1_time2) - id(pump1_time1);
+            if (time_diff > 0.1) {  // Almeno 0.1 secondi di differenza
+              return 100.0 / time_diff;
+            } else {
+              return 0.0;
+            }
+      - switch.turn_off: pump1_relay
+      - text_sensor.template.publish:
+          id: pump1_cal_status
+          state: !lambda |-
+            return "Calibrazione completata! Portata: " + to_string(id(pump1_flow_rate)) + " ml/s";
+      - logger.log: 
+          format: "Calibration completed. Flow rate: %.3f ml/s"
+          args: ['id(pump1_flow_rate)']
+
+  # ---------------------------------------------------------------------------
+  # Erogazione
+
+  - platform: template
+    name: "Dispense Pump 1 Volume"
+    id: pump1_dispense
+    icon: "mdi:water-pump"
+    on_press:
+      # logica di erogazione:
+      #  - controllo di avere una portata valida
+      #  - calcolo il tempo necessario (e lo loggo)
+      #  - avvio la pompa
+      #  - aspetto il tempo necessario
+      #  - spengo la pompa
+      #  - aggiorno lo stato (testo)
+      - if:
+          condition:
+            lambda: 'return id(pump1_flow_rate) > 0;'
+          then:
+            - lambda: |-
+                float volume = id(pump1_volume).state;
+                float time_needed = volume / id(pump1_flow_rate);
+                ESP_LOGI("pump", "Dispensing %.0f ml for %.2f seconds", volume, time_needed);
+            - switch.turn_on: pump1_relay
+            - delay: !lambda 'return (id(pump1_volume).state / id(pump1_flow_rate)) * 1000;'
+            - switch.turn_off: pump1_relay
+            - text_sensor.template.publish:
+                id: pump1_cal_status
+                state: !lambda 'return "Erogati " + to_string(id(pump1_volume).state) + " ml";'
+          else:
+            - text_sensor.template.publish:
+                id: pump1_cal_status
+                state: "ERRORE: Calibrazione necessaria!"
+
+
+text_sensor:
+  - platform: template
+    name: "Pump 1 Calibration Status"
+    id: pump1_cal_status
+    icon: "mdi:information"
+    # valore iniziale:
+    lambda: 'return "Ready for calibration";'
+
+
+number:
+  - platform: template
+    name: "Pump 1 Volume (ml)"
+    id: pump1_volume
+    min_value: 1
+    max_value: 1000
+    step: 1
+    initial_value: 100
+    optimistic: true
+    unit_of_measurement: "ml"
+    icon: "mdi:cup-water"

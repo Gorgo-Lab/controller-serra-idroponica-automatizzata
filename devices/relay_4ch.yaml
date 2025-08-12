@@ -10,12 +10,13 @@
 # anche se si scalda di brutto il motore
 
 # le due sono leggermente diverse
-# 
+# relay A, B, C
+
 
 
 esphome:
-  name: peristaltic_pumps
-  friendly_name: "4 Peristaltic Pumps Controller"
+  name: relay_4ch
+  friendly_name: "relay4ch"
 
 
 esp32:
@@ -90,7 +91,7 @@ switch:
     name: "Pump 1 Relay"
     id: pump1_relay
     restore_mode: RESTORE_DEFAULT_OFF
-    internal: true
+    internal: false
 
   # pompa 2
   - platform: gpio
@@ -101,73 +102,29 @@ switch:
     name: "Pump 2 Relay"
     id: pump2_relay
     restore_mode: RESTORE_DEFAULT_OFF
-    internal: true
+    internal: false
 
   # pompa 3
-  - platform: gpio
-    pin: 
-      number: GPIO5
-      inverted: true  # Active LOW relay module
-      mode: OUTPUT_OPEN_DRAIN
-    name: "Pump 3 Relay"
-    id: pump3_relay
-    restore_mode: RESTORE_DEFAULT_OFF
-    internal: true
+  # - platform: gpio
+  #   pin: 
+  #     number: GPIO5
+  #     inverted: true  # Active LOW relay module
+  #     mode: OUTPUT_OPEN_DRAIN
+  #   name: "Pump 3 Relay"
+  #   id: pump3_relay
+  #   restore_mode: RESTORE_DEFAULT_OFF
+  #   internal: false
 
   # pompa 4
-  - platform: gpio
-    pin: 
-      number: GPIO18
-      inverted: true  # Active LOW relay module
-      mode: OUTPUT_OPEN_DRAIN
-    name: "Pump 4 Relay"
-    id: pump4_relay
-    restore_mode: RESTORE_DEFAULT_OFF
-    internal: true
-
-  # ---------------------------------------------------------------------------
-  # Manual pump controls
-
-  # pompa 1
-  - platform: template
-    name: "Pump 1 Manual"
-    id: pump1_manual
-    icon: "mdi:water-pump"
-    turn_on_action:
-      - switch.turn_on: pump1_relay
-    turn_off_action:
-      - switch.turn_off: pump1_relay
-
-  # pompa 2
-  - platform: template
-    name: "Pump 2 Manual"
-    id: pump2_manual
-    icon: "mdi:water-pump"
-    turn_on_action:
-      - switch.turn_on: pump2_relay
-    turn_off_action:
-      - switch.turn_off: pump2_relay
-
-  # pompa 3
-  - platform: template
-    name: "Pump 3 Manual"
-    id: pump3_manual
-    icon: "mdi:water-pump"
-    turn_on_action:
-      - switch.turn_on: pump3_relay
-    turn_off_action:
-      - switch.turn_off: pump3_relay
-
-  # pompa 4
-  - platform: template
-    name: "Pump 4 Manual"
-    id: pump4_manual
-    icon: "mdi:water-pump"
-    turn_on_action:
-      - switch.turn_on: pump4_relay
-    turn_off_action:
-      - switch.turn_off: pump4_relay
-
+  # - platform: gpio
+  #   pin: 
+  #     number: GPIO18
+  #     inverted: true  # Active LOW relay module
+  #     mode: OUTPUT_OPEN_DRAIN
+  #   name: "Pump 4 Relay"
+  #   id: pump4_relay
+  #   restore_mode: RESTORE_DEFAULT_OFF
+  #   internal: false
 
 
 # -----------------------------------------------------------------------------
@@ -185,8 +142,8 @@ button:
       - logger.log: "Emergency stop activated!"
       - switch.turn_off: pump1_relay
       - switch.turn_off: pump2_relay  
-      - switch.turn_off: pump3_relay
-      - switch.turn_off: pump4_relay
+      # - switch.turn_off: pump3_relay
+      # - switch.turn_off: pump4_relay
 
   # ---------------------------------------------------------------------------
   # Bottoni per la calibrazione
@@ -229,7 +186,8 @@ button:
       - logger.log: 
           format: "First point: %.2f seconds"
           args: ['id(pump1_time1)']
-      
+
+
   - platform: template
     name: "Pump 1 Second Point (200ml)" 
     id: pump1_second_point
@@ -302,8 +260,6 @@ text_sensor:
     name: "Pump 1 Calibration Status"
     id: pump1_cal_status
     icon: "mdi:information"
-    # valore iniziale:
-    lambda: 'return "Ready for calibration";'
 
 
 number:
